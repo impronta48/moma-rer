@@ -4,6 +4,7 @@ namespace Rer\Controller;
 use Cake\Core\Configure;
 use Cake\ORM\TableRegistry;
 use App\Controller\AppController as BaseController;
+use Cake\Http\Cookie\Cookie;
 
 //** Plugin specifico per l'accesso IAM di Regione Emilia Romagna */
 
@@ -36,6 +37,7 @@ class IamController extends BaseController
         ];
 
         //Genera il token JWT
+        /** @var \App\Model\Table\UsersTable $users */
         $users = TableRegistry::getTableLocator()->get('Users');
         // Cerco un utente con quel codice fiscale
         if (!$cf) {
@@ -44,6 +46,23 @@ class IamController extends BaseController
         $user = $users->find()->where(['cf' => $cf])->first();
         if ($user) {
             $token = $user->getToken($user->id);  
+            // Imposta cookie HttpOnly + Secure
+
+            //  Crea l'oggetto Cookie
+            $cookie = new Cookie(
+                'jwt_token',
+                $token,
+                new \DateTime('+5 minutes'),
+                '/',
+                null, // dominio (null = automatico)
+                true, // secure
+                true, // httpOnly
+                'Lax' // SameSite
+            );
+
+            //  Aggiungi il cookie alla response
+            $this->response = $this->response->withCookie($cookie);
+
             //$token = $user->getToken("335221bd-462b-4c21-8531-1462f48d9752");  //admin
             //$token = $user->getToken("2e64f54b-df46-4c8e-b69e-6179cff4e209");    //sebastian
             //$token = $user->getToken("33c61cbc-6985-4c31-a1eb-fce099ab9e23");    //user
@@ -55,7 +74,9 @@ class IamController extends BaseController
         $fullbaseUrl = "https://$_SERVER[HTTP_HOST]";
         $frontendUrl = Configure::read('FRONTEND_URL') ?: $fullbaseUrl;
         // Reindirizza alla home dell'applicazione
-        header("Location: $frontendUrl/login?token=$token");
+        //header("Location: $frontendUrl/login?token=$token");
+        return $this->redirect("$frontendUrl/");
+
         exit();
     }
 
