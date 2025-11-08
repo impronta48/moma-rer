@@ -62,20 +62,16 @@ class IamController extends BaseController
 
             //  Aggiungi il cookie alla response
             $this->response = $this->response->withCookie($cookie);
-
-            //$token = $user->getToken("335221bd-462b-4c21-8531-1462f48d9752");  //admin
-            //$token = $user->getToken("2e64f54b-df46-4c8e-b69e-6179cff4e209");    //sebastian
-            //$token = $user->getToken("33c61cbc-6985-4c31-a1eb-fce099ab9e23");    //user
         }
         else {
             // Utente non trovato, gestire l'errore di conseguenza
-            throw new \Exception("Utente con codice fiscale $cf non trovato.");
+            $message = "Utente con codice fiscale $cf non trovato. Autenticazione IAM fallita.";
+            $this->log($message, 'error');
         }
         $fullbaseUrl = "https://$_SERVER[HTTP_HOST]";
         $frontendUrl = Configure::read('FRONTEND_URL') ?: $fullbaseUrl;
-        // Reindirizza alla home dell'applicazione
-        //header("Location: $frontendUrl/login?token=$token");
-        return $this->redirect("$frontendUrl/");
+        // Reindirizza alla home dell'applicazione        
+        return $this->redirect("$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione IAM completata con successo."));
 
         exit();
     }
