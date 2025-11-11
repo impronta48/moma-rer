@@ -43,16 +43,25 @@ class IamController extends BaseController
         if (!$cf) {
             throw new \Exception("Codice fiscale non fornito negli header. Autenticazione IAM fallita.");
         }
+        /** @var \App\Model\Entity\User|null $user */
         $user = $users->find()->where(['cf' => $cf])->first();
         if ($user) {
-            $token = $user->getToken($user->id);  
-            // Imposta cookie HttpOnly + Secure
-
-            //  Crea l'oggetto Cookie
-            $cookie = new Cookie(
+            // Genera access token (24 ore)
+            $token = $user->getToken($user->id);
+            
+            // Genera refresh token (30 giorni)
+            $refreshToken = $user->getRefreshToken($user->id);
+            
+            // Salva il refresh token nel database
+            $user->refresh_token = $refreshToken;
+            $user->refresh_token_expires = date('Y-m-d H:i:s', time() + \App\Model\Entity\User::REFRESH_TOKEN_MONTH_LIVE);
+            $users->save($user);
+            
+            // Imposta cookie HttpOnly + Secure per access token
+            $accessCookie = new Cookie(
                 'jwt_token',
                 $token,
-                new \DateTime('+5 minutes'),
+                new \DateTime('+5 minutes'), // 5 minuti
                 '/',
                 null, // dominio (null = automatico)
                 true, // secure
@@ -60,8 +69,25 @@ class IamController extends BaseController
                 'Lax' // SameSite
             );
 
-            //  Aggiungi il cookie alla response
-            $this->response = $this->response->withCookie($cookie);
+            // Imposta cookie HttpOnly + Secure per refresh token (30 giorni)
+            $refreshCookie = new Cookie(
+                'jwt_refresh_token',
+                $refreshToken,
+                new \DateTime('+30 days'), // 30 giorni
+                '/',
+                null, // dominio (null = automatico)
+                true, // secure
+                true, // httpOnly
+                'Lax' // SameSite
+            );
+
+            // Aggiungi i cookie alla response
+            $this->response = $this->response
+                ->withCookie($accessCookie)
+                ->withCookie($refreshCookie);
+            
+            // Log autenticazione IAM con refresh token
+            $this->log("IAM Authentication successful for user {$user->email} (CF: $cf) - Access and Refresh tokens generated", 'info');
         }
         else {
             // Utente non trovato, gestire l'errore di conseguenza
