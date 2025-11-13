@@ -18,6 +18,11 @@ class IamController extends BaseController
     //Legge gli header IAM e redirige al frontend con token JWT
     public function index()
     {
+        $fullbaseUrl = "https://$_SERVER[HTTP_HOST]";
+        $frontendUrl = Configure::read('FRONTEND_URL') ?: $fullbaseUrl;
+        $route = $this->request->getUri()->getPath();
+        $method = ($route === '/rer/spid') ? 'SPID' : 'CREDENZIALI REGIONALI IAM';
+
         // Lettura degli header HTTP
         $cf = $_SERVER['HTTP_CODICEFISCALE'] ?? null;
         $nome = $_SERVER['HTTP_NOME'] ?? null;
@@ -41,13 +46,15 @@ class IamController extends BaseController
         $users = TableRegistry::getTableLocator()->get('Users');
         // Cerco un utente con quel codice fiscale
         if (!$cf) {
-            throw new \Exception("Codice fiscale non fornito negli header. Autenticazione IAM fallita.");
+            $this->log("Codice fiscale non fornito negli header. Autenticazione $method fallita.");
+            $message = "Codice fiscale non fornito negli header. Autenticazione $method fallita.";
+            return $this->redirect("$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione $method completata con successo."));
         }
         /** @var \App\Model\Entity\User|null $user */
         $user = $users->find()->where(['cf' => $cf])->first();
         if ($user) {
-            // Genera access token (24 ore)
-            $token = $user->getToken($user->id);
+            // Genera access token (1 minuto)
+            $token = $user->getToken($user->id, MINUTE);
             
             // Genera refresh token (30 giorni)
             $refreshToken = $user->getRefreshToken($user->id);
@@ -61,7 +68,7 @@ class IamController extends BaseController
             $accessCookie = new Cookie(
                 'jwt_token',
                 $token,
-                new \DateTime('+5 minutes'), // 5 minuti
+                new \DateTime('+1 minutes'), // 5 minuti
                 '/',
                 null, // dominio (null = automatico)
                 true, // secure
@@ -87,18 +94,16 @@ class IamController extends BaseController
                 ->withCookie($refreshCookie);
             
             // Log autenticazione IAM con refresh token
-            $this->log("IAM Authentication successful for user {$user->email} (CF: $cf) - Access and Refresh tokens generated", 'info');
+            $this->log("$method Authentication successful for user {$user->email} (CF: $cf) - Access and Refresh tokens generated", 'info');
         }
         else {
             // Utente non trovato, gestire l'errore di conseguenza
-            $message = "Utente con codice fiscale $cf non trovato. Autenticazione IAM fallita.";
-            $this->log($message, 'error');
+            $message = "Utente con codice fiscale $cf non trovato. Autenticazione $method fallita. Ti invitiamo a registrarti al sistema prima di effettuare il login tramite $method.";
+            $this->log($message, 'error');            
         }
-        $fullbaseUrl = "https://$_SERVER[HTTP_HOST]";
-        $frontendUrl = Configure::read('FRONTEND_URL') ?: $fullbaseUrl;
-        // Reindirizza alla home dell'applicazione        
-        return $this->redirect("$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione IAM completata con successo."));
 
+        // Reindirizza alla home dell'applicazione        
+        return $this->redirect("$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione $method completata con successo."));
         exit();
     }
 

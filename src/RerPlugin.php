@@ -40,7 +40,9 @@ class RerPlugin extends BasePlugin
             ['path' => '/rer'],
             function (RouteBuilder $builder) {
                 // Add custom routes here
-
+                $builder->get('/iam', ['controller' => 'Iam', 'action' => 'index']);
+                //Alla fine lo spid è la stessa coda di IAM per quel che ci riguarda, per cui possiamo evitare di duplicare il codice
+                $builder->get('/spid', ['controller' => 'Iam', 'action' => 'index']);        
                 $builder->fallbacks();
             }
         );
