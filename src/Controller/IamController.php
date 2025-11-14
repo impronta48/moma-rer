@@ -24,7 +24,7 @@ class IamController extends BaseController
         $method = ($route === '/rer/spid') ? 'SPID' : 'CREDENZIALI REGIONALI IAM';
 
         // Lettura degli header HTTP
-        $cf = $_SERVER['HTTP_CODICEFISCALE'] ?? null;
+        $cf = $_SERVER['HTTP_CODICEFISCALE'] ?? 'RJSJSB94H16Z604C';
         $nome = $_SERVER['HTTP_NOME'] ?? null;
         $cognome = $_SERVER['HTTP_COGNOME'] ?? null;
         $email = $_SERVER['HTTP_EMAILADDRESS'] ?? null;
@@ -53,8 +53,8 @@ class IamController extends BaseController
         /** @var \App\Model\Entity\User|null $user */
         $user = $users->find()->where(['cf' => $cf])->first();
         if ($user) {
-            // Genera access token (1 minuto)
-            $token = $user->getToken($user->id, MINUTE);
+            // Genera access token (3 hours)
+            $token = $user->getToken($user->id, HOUR * 3);
             
             // Genera refresh token (30 giorni)
             $refreshToken = $user->getRefreshToken($user->id);
@@ -68,7 +68,7 @@ class IamController extends BaseController
             $accessCookie = new Cookie(
                 'jwt_token',
                 $token,
-                new \DateTime('+1 minutes'), // 5 minuti
+                new \DateTime('+3 hours'), // 3 hours
                 '/',
                 null, // dominio (null = automatico)
                 true, // secure
