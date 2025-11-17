@@ -24,7 +24,7 @@ class IamController extends BaseController
         $method = ($route === '/rer/spid') ? 'SPID' : 'CREDENZIALI REGIONALI IAM';
 
         // Lettura degli header HTTP
-        $cf = $_SERVER['HTTP_CODICEFISCALE'] ?? 'RJSJSB94H16Z604C';
+        $cf = $_SERVER['HTTP_CODICEFISCALE'] ?? null;
         $nome = $_SERVER['HTTP_NOME'] ?? null;
         $cognome = $_SERVER['HTTP_COGNOME'] ?? null;
         $email = $_SERVER['HTTP_EMAILADDRESS'] ?? null;
