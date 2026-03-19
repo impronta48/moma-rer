@@ -22,6 +22,9 @@ class IamController extends BaseController
         $frontendUrl = Configure::read('FRONTEND_URL') ?: $fullbaseUrl;
         $route = $this->request->getUri()->getPath();
         $method = ($route === '/rer/spid') ? 'SPID' : 'CREDENZIALI REGIONALI IAM';
+        
+        // Get return_url from query parameters (passed from frontend login)
+        $returnUrl = $this->request->getQuery('return_url');
 
         // Lettura degli header HTTP
         $cf = $_SERVER['HTTP_CODICEFISCALE'] ?? null;
@@ -48,7 +51,11 @@ class IamController extends BaseController
         if (!$cf) {
             $this->log("Codice fiscale non fornito negli header. Autenticazione $method fallita.");
             $message = "Codice fiscale non fornito negli header. Autenticazione $method fallita.";
-            return $this->redirect("$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione $method completata con successo."));
+            $redirectUrl = "$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione $method completata con successo.");
+            if ($returnUrl) {
+                $redirectUrl .= "&returnUrl=" . urlencode($returnUrl);
+            }
+            return $this->redirect($redirectUrl);
         }
         /** @var \App\Model\Entity\User|null $user */
         $user = $users->find()->where(['cf' => $cf])->first();
@@ -103,8 +110,11 @@ class IamController extends BaseController
         }
 
         // Reindirizza alla home dell'applicazione        
-        return $this->redirect("$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione $method completata con successo."));
-        exit();
+        $redirectUrl = "$frontendUrl/login?message=" . urlencode($message ?? "Autenticazione $method completata con successo.");
+        if ($returnUrl) {
+            $redirectUrl .= "&returnUrl=" . urlencode($returnUrl);
+        }
+        return $this->redirect($redirectUrl);
     }
 
 }
