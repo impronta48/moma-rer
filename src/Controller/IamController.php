@@ -58,7 +58,31 @@ class IamController extends BaseController
             return $this->redirect($redirectUrl);
         }
         /** @var \App\Model\Entity\User|null $user */
-        $user = $users->find()->where(['cf' => $cf])->first();
+        $matches = $users->findLoginCandidates('cf', $cf)->all()->toArray();
+        // Più profili con lo stesso CF: considero solo gli attivi (se ce ne sono).
+        if (count($matches) > 1) {
+            $active = array_values(array_filter($matches, fn ($u) => $u->active));
+            if ($active) {
+                $matches = $active;
+            }
+        }
+
+        if (count($matches) > 1) {
+            // Login incompleto: nessun cookie, il frontend mostra la scelta del
+            // profilo e chiama POST /users/select-profile.json (vedi UsersController).
+            $profiles = $users->buildProfileChoices($matches);
+            $pendingToken = \App\Model\Entity\User::getPendingLoginToken(array_column($profiles, 'id'));
+            $this->log("$method: " . count($profiles) . " profili per CF $cf, scelta richiesta", 'info');
+
+            $redirectUrl = "$frontendUrl/login?pendingToken=" . urlencode($pendingToken)
+                . '&profiles=' . urlencode(json_encode($profiles));
+            if ($returnUrl) {
+                $redirectUrl .= "&returnUrl=" . urlencode($returnUrl);
+            }
+            return $this->redirect($redirectUrl);
+        }
+
+        $user = $matches[0] ?? null;
         if ($user) {
             // Genera access token (3 hours)
             $token = $user->getToken($user->id, HOUR * 3);
