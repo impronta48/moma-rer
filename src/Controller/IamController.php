@@ -2,6 +2,7 @@
 namespace Rer\Controller;
 
 use Cake\Core\Configure;
+use Cake\Log\Log;
 use Cake\ORM\TableRegistry;
 use App\Controller\AppController as BaseController;
 use Cake\Http\Cookie\Cookie;
@@ -18,7 +19,7 @@ class IamController extends BaseController
     //Legge gli header IAM e redirige al frontend con token JWT
     public function index()
     {
-        $fullbaseUrl = "https://$_SERVER[HTTP_HOST]";
+        $fullbaseUrl = 'https://' . $this->request->getEnv('HTTP_HOST');
         $frontendUrl = Configure::read('FRONTEND_URL') ?: $fullbaseUrl;
         $route = $this->request->getUri()->getPath();
         $method = ($route === '/rer/spid') ? 'SPID' : 'CREDENZIALI REGIONALI IAM';
@@ -27,12 +28,12 @@ class IamController extends BaseController
         $returnUrl = $this->request->getQuery('return_url');
 
         // Lettura degli header HTTP
-        $cf = $_SERVER['HTTP_CODICEFISCALE'] ?? null;
-        $nome = $_SERVER['HTTP_NOME'] ?? null;
-        $cognome = $_SERVER['HTTP_COGNOME'] ?? null;
-        $email = $_SERVER['HTTP_EMAILADDRESS'] ?? null;
-        $trust = $_SERVER['HTTP_TRUSTLEVEL'] ?? 'Basso';
-        $policy = $_SERVER['HTTP_POLICYLEVEL'] ?? 'Basso';
+        $cf = $this->request->getEnv('HTTP_CODICEFISCALE');
+        $nome = $this->request->getEnv('HTTP_NOME');
+        $cognome = $this->request->getEnv('HTTP_COGNOME');
+        $email = $this->request->getEnv('HTTP_EMAILADDRESS');
+        $trust = $this->request->getEnv('HTTP_TRUSTLEVEL') ?? 'Basso';
+        $policy = $this->request->getEnv('HTTP_POLICYLEVEL') ?? 'Basso';
 
         // Creazione sessione applicativa
         $user =[
@@ -59,12 +60,20 @@ class IamController extends BaseController
         }
         /** @var \App\Model\Entity\User|null $user */
         $matches = $users->findLoginCandidates('cf', $cf)->all()->toArray();
-        // Più profili con lo stesso CF: considero solo gli attivi (se ce ne sono).
-        if (count($matches) > 1) {
-            $active = array_values(array_filter($matches, fn ($u) => $u->active));
-            if ($active) {
-                $matches = $active;
+        // Solo i profili attivi possono accedere: gli inattivi vengono scartati.
+        // Se esistono corrispondenze ma nessuna e' attiva, niente cookie ne'
+        // refresh token: redirect al login con il messaggio "utente non attivo".
+        $found = $matches;
+        $matches = array_values(array_filter($matches, fn ($u) => $u->active));
+        if ($found && !$matches) {
+            $ids = implode(', ', array_map(fn ($u) => "{$u->id} ({$u->email})", $found));
+            Log::write('info', "$method: Login rejected: user $ids is not active (CF: $cf)");
+            $message = 'Il tuo utente non è attivo, contatta l\'amministratore per chiedere la riattivazione.';
+            $redirectUrl = "$frontendUrl/login?message=" . urlencode($message);
+            if ($returnUrl) {
+                $redirectUrl .= "&returnUrl=" . urlencode($returnUrl);
             }
+            return $this->redirect($redirectUrl);
         }
 
         if (count($matches) > 1) {
